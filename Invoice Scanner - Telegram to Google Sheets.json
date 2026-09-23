@@ -1,0 +1,563 @@
+{
+  "name": "Invoice Scanner - Telegram to Google Sheets",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "7b332866-27fb-494f-aede-31e1d458d973",
+      "name": "Telegram Trigger2",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -976,
+        2032
+      ],
+      "webhookId": "REPLACE_WITH_WEBHOOK_ID",
+      "credentials": {
+        "telegramApi": {
+          "id": "yndCbvYDpXUPGEvp",
+          "name": "Telegram account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has-photo",
+              "leftValue": "={{ $json.message.photo?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9a01794f-df47-4be5-aa33-62f42acda313",
+      "name": "Has Photo?2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo[$json.message.photo.length - 1].file_id }}",
+        "additionalFields": {}
+      },
+      "id": "c0efd406-4276-4aea-bb63-62b90de24339",
+      "name": "Download Photo2",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -528,
+        1952
+      ],
+      "webhookId": "86298656-6ad2-4232-9945-48c090aca8eb",
+      "credentials": {
+        "telegramApi": {
+          "id": "yndCbvYDpXUPGEvp",
+          "name": "Telegram account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Read the actual binary buffer using n8n's helper (works regardless of\n// whether binary data is stored in memory, filesystem, or S3)\nconst binaryPropertyName = 'data';\nconst buffer = await this.helpers.getBinaryDataBuffer(0, binaryPropertyName);\nconst base64 = buffer.toString('base64');\nconst mimeType = items[0].binary[binaryPropertyName].mimeType || 'image/jpeg';\n\nconst now = new Date();\nconst invoiceLocalId = 'INV-' + now.getTime();\n\nreturn [{\n  json: {\n    invoice_local_id: invoiceLocalId,\n    processed_at: now.toISOString(),\n    mime_type: mimeType,\n    image_base64: base64,\n    chat_id: $('Telegram Trigger2').first().json.message.chat.id\n  }\n}];"
+      },
+      "id": "9f42c861-417b-4010-a103-28f7403c360e",
+      "name": "Prepare Image2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        1952
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  contents: [{\n    parts: [\n      {\n        inline_data: {\n          mime_type: $json.mime_type,\n          data: $json.image_base64\n        }\n      },\n      {\n        text: \"هذه صورة فاتورة مصرية (قد تكون مطبوعة أو مكتوبة بخط اليد). استخرج البيانات وأرجعها بصيغة JSON فقط بدون أي نص إضافي أو علامات markdown، بالشكل التالي بالضبط:\\n{\\n  \\\"invoice_number\\\": \\\"\\\",\\n  \\\"date\\\": \\\"\\\",\\n  \\\"store_name\\\": \\\"\\\",\\n  \\\"store_phone\\\": \\\"\\\",\\n  \\\"customer_name\\\": \\\"\\\",\\n  \\\"customer_address\\\": \\\"\\\",\\n  \\\"sales_rep\\\": \\\"\\\",\\n  \\\"items\\\": [ {\\\"name\\\": \\\"\\\", \\\"quantity\\\": 0, \\\"unit_price\\\": 0, \\\"total_price\\\": 0} ],\\n  \\\"invoice_total\\\": 0,\\n  \\\"previous_balance\\\": 0,\\n  \\\"paid_cash\\\": 0,\\n  \\\"current_balance\\\": 0,\\n  \\\"raw_notes\\\": \\\"\\\"\\n}\\nإذا كان أي حقل غير موجود في الصورة اتركه فارغاً أو صفر. اكتب أي كلام غير واضح أو صعب القراءة في raw_notes بدلاً من تخمينه.\"\n      }\n    ]\n  }],\n  generationConfig: {\n    response_mime_type: \"application/json\"\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "5fd74c01-cf51-4792-8b31-bf1f4642da7f",
+      "name": "Extract Data (Gemini Vision - Free)2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -64,
+        2000
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "1R1kjUXKJRDLOcbx",
+          "name": "Query Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Gemini's JSON response and merge with our tracking fields\nconst response = items[0].json;\nlet text = response.candidates[0].content.parts[0].text.trim();\ntext = text.replace(/```json|```/g, '').trim();\n\nlet data;\ntry {\n  data = JSON.parse(text);\n} catch (e) {\n  data = { items: [], raw_notes: 'PARSE_ERROR: ' + text };\n}\n\nconst prep = $('Prepare Image2').first().json;\n\nreturn [{\n  json: {\n    invoice_local_id: prep.invoice_local_id,\n    processed_at: prep.processed_at,\n    chat_id: prep.chat_id,\n    invoice_number: data.invoice_number || '',\n    date: data.date || '',\n    store_name: data.store_name || '',\n    store_phone: data.store_phone || '',\n    customer_name: data.customer_name || '',\n    customer_address: data.customer_address || '',\n    sales_rep: data.sales_rep || '',\n    invoice_total: data.invoice_total || 0,\n    previous_balance: data.previous_balance || 0,\n    paid_cash: data.paid_cash || 0,\n    current_balance: data.current_balance || 0,\n    raw_notes: data.raw_notes || '',\n    item_count: (data.items || []).length,\n    items: data.items || []\n  }\n}];"
+      },
+      "id": "9e4eb657-e786-4fc4-b770-64a0919e4fda",
+      "name": "Parse Extracted Data2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        1952
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1RQHTypKIXxxSPg1PkzYyycMkviS93_z2Yi7vNl33FlY",
+          "mode": "list",
+          "cachedResultName": "judran",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1RQHTypKIXxxSPg1PkzYyycMkviS93_z2Yi7vNl33FlY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "الفواتير",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1RQHTypKIXxxSPg1PkzYyycMkviS93_z2Yi7vNl33FlY/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Invoice_ID": "={{ $json.invoice_local_id }}",
+            "رقم_الفاتورة": "={{ $json.invoice_number }}",
+            "التاريخ": "={{ $json.date }}",
+            "اسم_المحل_المورد": "={{ $json.store_name }}",
+            "تليفون_المحل": "={{ $json.store_phone }}",
+            "اسم_العميل": "={{ $json.customer_name }}",
+            "إجمالي_الفاتورة": "={{ $json.invoice_total }}",
+            "الرصيد_السابق": "={{ $json.previous_balance }}",
+            "المدفوع_نقدا": "={{ $json.paid_cash }}",
+            "عدد_الأصناف": "={{ $json.item_count }}",
+            "ملاحظات_خام": "={{ $json.raw_notes }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Invoice_ID",
+              "displayName": "Invoice_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "رقم_الفاتورة",
+              "displayName": "رقم_الفاتورة",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "التاريخ",
+              "displayName": "التاريخ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "اسم_المحل_المورد",
+              "displayName": "اسم_المحل_المورد",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "تليفون_المحل",
+              "displayName": "تليفون_المحل",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "اسم_العميل",
+              "displayName": "اسم_العميل",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "إجمالي_الفاتورة",
+              "displayName": "إجمالي_الفاتورة",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "الرصيد_السابق",
+              "displayName": "الرصيد_السابق",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "المدفوع_نقدا",
+              "displayName": "المدفوع_نقدا",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "عدد_الأصناف",
+              "displayName": "عدد_الأصناف",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ملاحظات_خام",
+              "displayName": "ملاحظات_خام",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "1fea57a8-d255-4373-a2b7-3548d5903a85",
+      "name": "Append to الفواتير2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        352,
+        1872
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YgYOC7dwvamDtC2P",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "id": "fd33e426-aeeb-4be6-8840-835aa4d839b8",
+      "name": "Split Out Items2",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        352,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const invoiceId = $('Parse Extracted Data2').first().json.invoice_local_id;\n  const it = item.json.items || item.json;\n  return {\n    json: {\n      invoice_id: invoiceId,\n      item_name: it.name || '',\n      quantity: it.quantity || 0,\n      unit_price: it.unit_price || 0,\n      total_price: it.total_price || 0\n    }\n  };\n});"
+      },
+      "id": "2ac7b335-4c07-46b4-b879-6343409f8693",
+      "name": "Flatten Item2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1RQHTypKIXxxSPg1PkzYyycMkviS93_z2Yi7vNl33FlY",
+          "mode": "list",
+          "cachedResultName": "judran",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1RQHTypKIXxxSPg1PkzYyycMkviS93_z2Yi7vNl33FlY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 810026207,
+          "mode": "list",
+          "cachedResultName": "الاصناف",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1RQHTypKIXxxSPg1PkzYyycMkviS93_z2Yi7vNl33FlY/edit#gid=810026207"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Invoice_ID": "={{ $json.invoice_id }}",
+            "اسم_الصنف": "={{ $json.item_name }}",
+            "الكمية": "={{ $json.quantity }}",
+            "السعر": "={{ $json.unit_price }}",
+            "القيمة": "={{ $json.total_price }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Invoice_ID",
+              "displayName": "Invoice_ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "اسم_الصنف",
+              "displayName": "اسم_الصنف",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "الكمية",
+              "displayName": "الكمية",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "السعر",
+              "displayName": "السعر",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "القيمة",
+              "displayName": "القيمة",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "9b46c517-e523-4008-92bc-ad3967b1848b",
+      "name": "Append to الأصناف2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        800,
+        2080
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YgYOC7dwvamDtC2P",
+          "name": "Google Sheets account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Extracted Data2').first().json.chat_id }}",
+        "text": "=✅ تم حفظ الفاتورة\nرقم: {{ $('Parse Extracted Data2').first().json.invoice_number || 'غير مذكور' }}\nالمحل: {{ $('Parse Extracted Data2').first().json.store_name }}\nالإجمالي: {{ $('Parse Extracted Data2').first().json.invoice_total }}\nعدد الأصناف: {{ $('Parse Extracted Data2').first().json.item_count }}",
+        "additionalFields": {}
+      },
+      "id": "798bf748-db46-4a30-ac02-be22c031347d",
+      "name": "Send Confirmation2",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1024,
+        1872
+      ],
+      "webhookId": "7cda3088-8963-45f6-b511-b22df28fd212",
+      "credentials": {
+        "telegramApi": {
+          "id": "yndCbvYDpXUPGEvp",
+          "name": "Telegram account 3"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger2": {
+      "main": [
+        [
+          {
+            "node": "Has Photo?2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Photo?2": {
+      "main": [
+        [
+          {
+            "node": "Download Photo2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Photo2": {
+      "main": [
+        [
+          {
+            "node": "Prepare Image2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Image2": {
+      "main": [
+        [
+          {
+            "node": "Extract Data (Gemini Vision - Free)2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Data (Gemini Vision - Free)2": {
+      "main": [
+        [
+          {
+            "node": "Parse Extracted Data2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Extracted Data2": {
+      "main": [
+        [
+          {
+            "node": "Append to الفواتير2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Out Items2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to الفواتير2": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Items2": {
+      "main": [
+        [
+          {
+            "node": "Flatten Item2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten Item2": {
+      "main": [
+        [
+          {
+            "node": "Append to الأصناف2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "28651e1d-0b29-4919-b78c-68535ea58224",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6044fe7aa7ebafb51b22953fd82fb602aa0bc2cacee3c6380565b173474655e6"
+  },
+  "nodeGroups": [],
+  "id": "Zn6vxep89AUqyUiw",
+  "tags": []
+}
